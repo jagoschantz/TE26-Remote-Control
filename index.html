@@ -36,6 +36,19 @@
   button:disabled { opacity:.35; }
   button svg { width:22px; height:22px; fill:currentColor; display:block; margin:auto; }
 
+  .modus { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; background:var(--pad); border-radius:14px; }
+  .modus button { background:transparent; padding:8px 0; font-size:14px; border-radius:11px; }
+  .modus button.an { background:var(--inv); color:var(--ink); }
+  #panel-frei, #panel-schritt { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; }
+  #pad { position:relative; flex:1; min-height:120px; border-radius:22px; background:var(--pad); touch-action:none; overflow:hidden; }
+  #pad.aus { opacity:.35; }
+  #pad::before, #pad::after { content:""; position:absolute; background:var(--line); }
+  #pad::before { left:50%; top:12%; bottom:12%; width:1px; } #pad::after { top:50%; left:12%; right:12%; height:1px; }
+  #knopf { position:absolute; width:56px; height:56px; margin:-28px 0 0 -28px; left:50%; top:50%; border-radius:50%;
+           background:var(--inv); box-shadow:0 4px 14px rgba(0,0,0,.5); transition:left .12s ease-out, top .12s ease-out; }
+  #pad.zieht #knopf { transition:none; }
+  #rcstart { padding:12px 0; }
+  #rcstart.an { background:var(--stop); }
   .kreuz { display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr); gap:8px; flex:1; min-height:0; }
   .kreuz button { min-height:44px; }
   #k-f { grid-area:1/2; } #k-l { grid-area:2/1; } #k-r { grid-area:2/3; } #k-b { grid-area:3/2; }
@@ -76,18 +89,27 @@
 
 <div class="app">
   <section class="seite" aria-label="Fahren">
-    <div class="kreuz">
-      <button id="k-f" aria-label="vorwärts"><svg viewBox="0 0 24 24"><path d="M12 4 4 14h5v6h6v-6h5z"/></svg></button>
-      <button id="k-l" aria-label="links 90 Grad"><svg viewBox="0 0 24 24"><path d="M9 5 3 11l6 6v-4h6a4 4 0 0 1 4 4v2h2v-2a6 6 0 0 0-6-6H9z"/></svg></button>
-      <button id="k-s" aria-label="Stopp">STOPP</button>
-      <button id="k-r" aria-label="rechts 90 Grad"><svg viewBox="0 0 24 24"><path d="M15 5l6 6-6 6v-4H9a4 4 0 0 0-4 4v2H3v-2a6 6 0 0 1 6-6h6z"/></svg></button>
-      <button id="k-b" aria-label="rückwärts"><svg viewBox="0 0 24 24"><path d="M12 20 4 10h5V4h6v6h5z"/></svg></button>
+    <div class="modus"><button id="m-frei" class="an">Frei</button><button id="m-schritt">Schritte</button></div>
+    <div id="panel-frei">
+      <button id="rcstart">Freie Fahrt starten</button>
+      <div id="pad" class="aus"><div id="knopf"></div></div>
+      <div class="chips" id="tempo" style="grid-template-columns:repeat(3,1fr)">
+        <button data-v="0.06">langsam</button><button data-v="0.10" class="an">mittel</button><button data-v="0.15">schnell</button>
+      </div>
     </div>
-    <div class="klein">Strecke</div>
-    <div class="chips" id="weite">
-      <button data-mm="50">5</button><button data-mm="100" class="an">10</button><button data-mm="180">18</button><button data-mm="300">30</button>
+    <div id="panel-schritt" style="display:none">
+      <div class="kreuz">
+        <button id="k-f" aria-label="vorwärts"><svg viewBox="0 0 24 24"><path d="M12 4 4 14h5v6h6v-6h5z"/></svg></button>
+        <button id="k-l" aria-label="links 90 Grad"><svg viewBox="0 0 24 24"><path d="M9 5 3 11l6 6v-4h6a4 4 0 0 1 4 4v2h2v-2a6 6 0 0 0-6-6H9z"/></svg></button>
+        <button id="k-s" aria-label="Stopp">STOPP</button>
+        <button id="k-r" aria-label="rechts 90 Grad"><svg viewBox="0 0 24 24"><path d="M15 5l6 6-6 6v-4H9a4 4 0 0 0-4 4v2H3v-2a6 6 0 0 1 6-6h6z"/></svg></button>
+        <button id="k-b" aria-label="rückwärts"><svg viewBox="0 0 24 24"><path d="M12 20 4 10h5V4h6v6h5z"/></svg></button>
+      </div>
+      <div class="chips" id="weite">
+        <button data-mm="50">5</button><button data-mm="100" class="an">10</button><button data-mm="180">18</button><button data-mm="300">30</button>
+      </div>
+      <div class="klein">cm · Drehen immer 90°</div>
     </div>
-    <div class="klein">cm · Drehen immer 90°</div>
   </section>
 
   <div id="wrap"><canvas id="c"></canvas><div id="tut">Nicht verbunden</div></div>
@@ -132,6 +154,14 @@ function senden(zeile) {                       // nacheinander schreiben, sonst 
   if (!rx) return;
   warteschlange = warteschlange.then(() => rx.writeValue(new TextEncoder().encode(zeile.trim() + '\n'))).catch(e => meldung('Senden: ' + e.message));
 }
+let rcSendet = false;
+function schnell(zeile) {                       // Joystick: neuester Wert gewinnt, nichts anstauen
+  if (!rx || rcSendet) return;
+  rcSendet = true;
+  const daten = new TextEncoder().encode(zeile + '\n');
+  const p = rx.writeValueWithoutResponse ? rx.writeValueWithoutResponse(daten) : rx.writeValue(daten);
+  p.catch(() => {}).finally(() => { rcSendet = false; });
+}
 function empfang(t) {
   puffer += t; let k;
   while ((k = puffer.indexOf('\n')) >= 0) { const z = puffer.slice(0, k); puffer = puffer.slice(k + 1); if (z.trim()) zeile(z); }
@@ -149,7 +179,9 @@ function zeile(z) {
     if (k === 'M') { const [i0, j0, w, h, b64] = rest.split(' '); D.map = { i0:+i0, j0:+j0, w:+w, h:+h, b64 }; return; }
     if (k === 'W') { D.weg = rest.split(' ').filter(Boolean).map(p => p.split(',').map(Number)); return; }
     if (k === 'Z' || k === 'C') return;
-    if (k === 'N') { D.letzte = rest; }
+    if (k === 'N') { D.letzte = rest;
+      if (/Freie Fahrt/.test(rest)) rcAn = true;
+      if (/FERTIG|Gestoppt/.test(rest)) rcAn = false; }
   } catch (e) {}
   meldung(z.startsWith('N ') ? z.slice(2) : z);
 }
@@ -160,7 +192,41 @@ function meldung(t) {
 function status(t) { $('tut').textContent = t; }
 
 // ---------- Bedienung ----------
-let weite = 100;
+let weite = 100, rcAn = false, rcVmax = 0.10, joy = null;
+const RC_W = 2.2;                               // rad/s bei vollem Ausschlag
+$('m-frei').onclick = () => modus(true); $('m-schritt').onclick = () => modus(false);
+function modus(frei) {
+  $('m-frei').classList.toggle('an', frei); $('m-schritt').classList.toggle('an', !frei);
+  $('panel-frei').style.display = frei ? 'flex' : 'none'; $('panel-schritt').style.display = frei ? 'none' : 'flex';
+  if (!frei && rcAn) senden('s');
+}
+document.querySelectorAll('#tempo button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tempo button').forEach(x => x.classList.remove('an')); b.classList.add('an'); rcVmax = +b.dataset.v; });
+$('rcstart').onclick = () => {
+  if (rcAn) { senden('s'); rcAn = false; return; }
+  Object.assign(D, { spur:[], weg:[], map:null, pose:null });
+  senden('rc'); rcAn = true; status('Roboter ruhig halten, Gyro wird kalibriert …');
+};
+const pad = $('pad'), knopf = $('knopf');
+function joySetzen(e) {
+  const r = pad.getBoundingClientRect(), rad = Math.min(r.width, r.height) / 2 - 28;
+  let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  const l = Math.hypot(dx, dy); if (l > rad) { dx *= rad / l; dy *= rad / l; }
+  knopf.style.left = (r.width / 2 + dx) + 'px'; knopf.style.top = (r.height / 2 + dy) + 'px';
+  const tot = v => Math.abs(v) < 0.08 ? 0 : v;             // kleine Totzone in der Mitte
+  joy = { x: tot(dx / rad), y: tot(-dy / rad) };
+}
+pad.onpointerdown = e => { if (!rcAn) return; pad.setPointerCapture(e.pointerId); pad.classList.add('zieht'); joySetzen(e); };
+pad.onpointermove = e => { if (joy) joySetzen(e); };
+pad.onpointerup = pad.onpointercancel = () => {
+  joy = null; pad.classList.remove('zieht'); knopf.style.left = '50%'; knopf.style.top = '50%';
+  schnell('rcv 0 0'); setTimeout(() => schnell('rcv 0 0'), 120);
+};
+setInterval(() => {                             // 10 x pro Sekunde, sonst haelt der Roboter nach 0,4 s an
+  if (!rcAn || !verbunden || !joy) return;
+  const v = joy.y * rcVmax, w = -joy.x * RC_W * (0.5 + 0.5 * (1 - Math.abs(joy.y)));   // beim Fahren sanfter lenken
+  schnell('rcv ' + v.toFixed(3) + ' ' + w.toFixed(2));
+}, 100);
 document.querySelectorAll('#weite button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#weite button').forEach(x => x.classList.remove('an')); b.classList.add('an'); weite = +b.dataset.mm; });
 $('k-f').onclick = () => senden('f ' + weite);
@@ -175,12 +241,18 @@ const faehrt = () => !!(D.pose && Date.now() - D.pose.t < 2000) && !/FERTIG|Gest
 function anzeigen() {
   $('verb').classList.toggle('an', verbunden);
   $('verbtxt').textContent = verbunden ? 'TE26' : 'Verbinden';
-  document.querySelectorAll('.kreuz button, #go').forEach(b => b.disabled = !verbunden);
-  const f = faehrt();
+  document.querySelectorAll('.kreuz button, #go, #rcstart').forEach(b => b.disabled = !verbunden);
+  if (!verbunden) rcAn = false;
+  $('rcstart').classList.toggle('an', rcAn);
+  $('rcstart').textContent = rcAn ? 'Freie Fahrt beenden' : 'Freie Fahrt starten';
+  pad.classList.toggle('aus', !rcAn);
+  $('go').disabled = !verbunden || rcAn;
+  const f = faehrt() && !rcAn;
   $('go').classList.toggle('faehrt', f);
   $('golbl').textContent = f ? 'Stopp' : 'Labyrinth starten';
   $('gopath').setAttribute('d', f ? 'M2 2h12v12H2z' : 'M3 1.5v13l11-6.5z');
   if (!verbunden) { if (!/Fehler|Verbinde/.test($('tut').textContent)) status('Nicht verbunden. Oben rechts verbinden.'); }
+  else if (rcAn) status(D.pose ? 'Freie Fahrt · Karte wird gezeichnet' : 'Roboter ruhig halten, Gyro wird kalibriert …');
   else status(f && D.letzte ? D.letzte : D.status && D.status.b ? 'fährt: ' + D.status.b : /FERTIG|Gestoppt/.test(D.letzte) ? D.letzte : 'Bereit');
 }
 
